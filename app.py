@@ -13,13 +13,27 @@ MONTHLY_FILE = "monthly_tasks.csv"
 # ================= UI STYLE =================
 st.markdown("""
 <style>
-.stApp {background: linear-gradient(135deg, #0f172a, #1e293b); color: white;}
-h1, h2, h3 {color: #22c55e;}
-.stButton>button {background-color: #22c55e; color: white; border-radius: 8px;}
+.stApp {
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: white;
+}
+h1, h2, h3 {
+    color: #22c55e;
+}
+.card {
+    padding: 20px;
+    border-radius: 12px;
+    background: #1e293b;
+    margin-bottom: 15px;
+}
+.metric {
+    font-size: 22px;
+    font-weight: bold;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ================= INIT FILES =================
+# ================= INIT =================
 def init_file(file):
     if not os.path.exists(file):
         df = pd.DataFrame(columns=["task", "date", "completed"])
@@ -28,14 +42,13 @@ def init_file(file):
 init_file(DAILY_FILE)
 init_file(MONTHLY_FILE)
 
-# ================= LOAD/SAVE =================
+# ================= DATA =================
 def load_data(file):
     try:
         df = pd.read_csv(file)
         return df[["task", "date", "completed"]]
     except:
         return pd.DataFrame(columns=["task", "date", "completed"])
-
 
 def save_data(df, file):
     df.to_csv(file, index=False)
@@ -44,7 +57,7 @@ def save_data(df, file):
 st.sidebar.title("📌 Navigation")
 page = st.sidebar.radio("Go to", ["Daily Tasks", "Monthly Planner"])
 
-# ================= DAILY PAGE =================
+# ================= DAILY =================
 if page == "Daily Tasks":
     today = datetime.date.today()
     day_name = today.strftime("%A")
@@ -54,7 +67,7 @@ if page == "Daily Tasks":
     df = load_data(DAILY_FILE)
     df = df[df["date"] == str(today)]
 
-    # Add task
+    # ADD TASK
     new_task = st.text_input("➕ Add Task")
     if st.button("Add Task") and new_task:
         new_row = pd.DataFrame({
@@ -66,21 +79,24 @@ if page == "Daily Tasks":
         save_data(df, DAILY_FILE)
         st.rerun()
 
-    # Show tasks with delete
+    # TASK LIST
     st.subheader("Your Tasks")
     to_delete = []
 
     for i in df.index:
-        col1, col2 = st.columns([0.8, 0.2])
+        col1, col2, col3 = st.columns([0.5, 0.3, 0.2])
 
         with col1:
+            st.write(df.at[i, "task"])
+
+        with col2:
             df.at[i, "completed"] = st.checkbox(
-                df.at[i, "task"],
+                "Completed",
                 value=bool(df.at[i, "completed"]),
                 key=f"d_{i}"
             )
 
-        with col2:
+        with col3:
             if st.button("❌", key=f"del_d_{i}"):
                 to_delete.append(i)
 
@@ -91,20 +107,29 @@ if page == "Daily Tasks":
 
     save_data(df, DAILY_FILE)
 
-    # Performance
-    perf = int((df["completed"].sum() / len(df)) * 100) if len(df) > 0 else 0
+    # PERFORMANCE
+    total = len(df)
+    done = df["completed"].sum()
+    perf = int((done / total) * 100) if total > 0 else 0
+
+    # KPI CARDS
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Total Tasks", total)
+    col2.metric("Completed", int(done))
+    col3.metric("Performance", f"{perf}%")
+
     st.progress(perf / 100)
-    st.write(f"🔥 Completion: {perf}%")
 
-    # Chart
-    st.subheader("📊 Daily Progress Trend")
+    # CHART
+    st.subheader("📊 Daily Trend")
+
     full_df = load_data(DAILY_FILE)
-
     if not full_df.empty:
-        chart = full_df.groupby("date")["completed"].mean() * 100
-        st.line_chart(chart)
+        trend = full_df.groupby("date")["completed"].mean() * 100
+        st.line_chart(trend)
 
-# ================= MONTHLY PAGE =================
+# ================= MONTHLY =================
 elif page == "Monthly Planner":
     st.title("📅 Monthly Habit Tracker")
 
@@ -114,23 +139,22 @@ elif page == "Monthly Planner":
 
     df = load_data(MONTHLY_FILE)
 
-    # RESET ON NEW MONTH
+    # RESET MONTH
     if not df.empty:
         df["month"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m")
         if df["month"].iloc[0] != current_month:
             df = pd.DataFrame(columns=["task", "date", "completed"])
 
-    # Add habit
+    # ADD HABIT
     new_task = st.text_input("➕ Add Habit")
     if st.button("Add Habit") and new_task:
         num_days = calendar.monthrange(year, month)[1]
 
         rows = []
         for day in range(1, num_days + 1):
-            date_str = str(datetime.date(year, month, day))
             rows.append({
                 "task": new_task,
-                "date": date_str,
+                "date": str(datetime.date(year, month, day)),
                 "completed": False
             })
 
@@ -138,16 +162,17 @@ elif page == "Monthly Planner":
         save_data(df, MONTHLY_FILE)
         st.rerun()
 
-    # GRID VIEW + DELETE TASK
-    st.subheader("📊 Habit Grid")
-
+    # DELETE
     tasks = df["task"].unique()
     delete_task = st.selectbox("🗑️ Delete Habit", ["None"] + list(tasks))
 
-    if delete_task != "None" and st.button("Delete Selected Habit"):
+    if delete_task != "None" and st.button("Delete Habit"):
         df = df[df["task"] != delete_task]
         save_data(df, MONTHLY_FILE)
         st.rerun()
+
+    # GRID
+    st.subheader("📊 Habit Grid")
 
     for task in tasks:
         st.write(f"### {task}")
@@ -160,22 +185,31 @@ elif page == "Monthly Planner":
             col = cols[(day - 1) % 7]
 
             with col:
-                checked = st.checkbox(
+                df.loc[i, "completed"] = st.checkbox(
                     str(day),
                     value=bool(row["completed"]),
                     key=f"{task}_{day}"
                 )
-                df.loc[i, "completed"] = checked
 
     save_data(df, MONTHLY_FILE)
 
-    # Performance
-    perf = int((df["completed"].sum() / len(df)) * 100) if len(df) > 0 else 0
-    st.subheader(f"📈 Monthly Completion: {perf}%")
-    st.progress(perf / 100)
+    # ✅ MONTHLY PERFORMANCE (FIXED)
+    total = len(df)
+    done = df["completed"].sum()
+    monthly_perf = int((done / total) * 100) if total > 0 else 0
 
-    # Chart
+    # KPI DASHBOARD
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Total Entries", total)
+    col2.metric("Completed", int(done))
+    col3.metric("Monthly Avg", f"{monthly_perf}%")
+
+    st.progress(monthly_perf / 100)
+
+    # TREND GRAPH
     st.subheader("📊 Monthly Trend")
+
     if not df.empty:
         trend = df.groupby("date")["completed"].mean() * 100
         st.line_chart(trend)
