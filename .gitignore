@@ -1,0 +1,13 @@
+# Ignore task data files
+daily_tasks.csv
+monthly_tasks.csv
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Mac system files
+.DS_Store
+
+# Streamlit cache
+.streamlit/
